@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Waste vs. Recyclable Classifier</title>
+    <!-- Load TensorFlow.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
+    <!-- Inline CSS styles -->
+    <style>
+        /* Reset */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Body: darker green background, less bright yellow text, bold font */
+        body {
+            background-color: #006400; /* Dark green */
+            color: #cccc00;            /* Less bright yellow */
+            font-weight: bold;
+            text-align: center;
+            padding: 40px;
+            font-family: Arial, sans-serif;
+            font-size: 1.25rem;
+        }
+
+        /* Image above title */
+        #headerImage {
+            display: block;
+            margin: 0 auto 20px auto;
+            max-width: 200px;
+            border: 2px solid #cccc00;
+            border-radius: 5px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-size: 2.5rem;
+        }
+
+        /* File input styling */
+        #imageUpload {
+            margin-bottom: 20px;
+            font-size: 1.25rem;
+            padding: 8px;
+        }
+
+        /* Preview image */
+        #preview {
+            max-width: 300px;
+            border: 3px solid #aaaa00;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Prediction result text */
+        #result {
+            font-size: 1.6rem;
+            margin-top: 10px;
+        }
+
+        /* Emphasize the predicted label */
+        .prediction {
+            color: #eeee00;
+        }
+
+        /* Additional descriptive text below the prediction */
+        #additionalInfo {
+            margin-top: 10px;
+            display: block;
+            font-size: 1.2rem;
+            color: #eeee00; /* slightly brighter yellow */
+        }
+
+        /* Logo for waste/recycle classification */
+        #labelLogo {
+            display: none;       /* hidden by default */
+            margin: 20px auto 0; /* center and give top margin */
+            max-width: 120px;    /* adjust size as needed */
+        }
+    </style>
+</head>
+<body>
+
+<!-- Image above the title (optional) -->
+<img id="headerImage" src="recycable.jpg" alt="Header Image" />
+
+<h1>Waste vs. Recyclable Classifier</h1>
+
+<!-- File input for user to upload an image -->
+<input type="file" accept="image/*" id="imageUpload" />
+
+<!-- Display the uploaded image -->
+<img id="preview" alt="Uploaded image will appear here" />
+
+<!-- Placeholder for classification result -->
+<p id="result">Loading model...</p>
+
+<!-- Logo displayed after prediction -->
+<img id="labelLogo" alt="Classification Logo" />
+
+<script>
+    let model;
+
+    // Provide short next-step instructions for each label
+    const infoMap = {
+        "Waste": "This item is generally not recyclable. Please place it in the trash to keep recyclables pure.",
+        "Recyclable": "This item can be recycled. Place it in the recycling bin to reduce environmental impact."
+    };
+
+    // Logos for each label
+    // Make sure these paths exist in your project, e.g., "img/waste_logo.png"
+    const logoMap = {
+        "Waste": "img/waste_picture.jpg",
+        "Recyclable": "img/blue_recycable.jpg"
+    };
+
+    // Load the model once the page loads
+    window.onload = async () => {
+        try {
+            model = await tf.loadLayersModel('model/model.json');
+            document.getElementById('result').innerText = "Model loaded! Please upload an image.";
+        } catch (err) {
+            console.error(err);
+            document.getElementById('result').innerText = "Error loading the model!";
+        }
+    };
+
+    const fileInput = document.getElementById('imageUpload');
+    const previewImg = document.getElementById('preview');
+    const resultEl = document.getElementById('result');
+    const labelLogo = document.getElementById('labelLogo');
+
+    fileInput.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Convert file to a local URL for the <img>
+        const imageURL = URL.createObjectURL(file);
+        previewImg.src = imageURL;
+        labelLogo.style.display = 'none'; // hide logo if previously shown
+        resultEl.innerText = "Processing...";
+
+        previewImg.onload = async () => {
+            // Convert the <img> to a tensor
+            let imgTensor = tf.browser.fromPixels(previewImg)
+                .resizeBilinear([224, 224])
+                .expandDims();
+
+            // Predict
+            const predictions = model.predict(imgTensor);
+            let data = await predictions.data();
+
+            // For a 2-class model: index 0 = "Waste", 1 = "Recyclable"
+            const labels = ["Waste", "Recyclable"];
+
+            // Find which index is higher
+            let classIndex = data[0] > data[1] ? 0 : 1;
+            let predictedLabel = labels[classIndex];
+            let confidence = (data[classIndex] * 100).toFixed(2);
+
+            // Get short description
+            let additionalInfo = infoMap[predictedLabel] || "";
+
+            // Display result + additional info
+            resultEl.innerHTML = `
+          Prediction: <span class="prediction">${predictedLabel}</span> (prob: ${confidence}%)
+          <br><span id="additionalInfo">${additionalInfo}</span>
+        `;
+
+            // Show corresponding logo
+            let logoPath = logoMap[predictedLabel];
+            if (logoPath) {
+                labelLogo.src = logoPath;
+                labelLogo.style.display = 'block'; // or 'inline' if you prefer
+            }
+
+            // Clean up
+            imgTensor.dispose();
+            predictions.dispose();
+        };
+    });
+</script>
+</body>
+</html>
